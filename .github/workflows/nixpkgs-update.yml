@@ -172,14 +172,13 @@ jobs:
           set -euxo pipefail
 
           mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
-          if [ ! -d nixpkgs ]; then
+          if [ ! -d "$NIXPKGS_LOCATION" ]; then
             git clone "$REPO_URL" "$NIXPKGS_LOCATION"
-            git remote add upstream "$UPSTREAM_REPO_URL" || git remote set-url upstream "$UPSTREAM_REPO_URL"
+            git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_REPO_URL"
           fi
-          cd "$NIXPKGS_LOCATION"
-          git fetch upstream
-          git reset --hard upstream/master
-          git gc --aggressive
+          git -C "$NIXPKGS_LOCATION" fetch upstream
+          git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
+          git -C "$NIXPKGS_LOCATION" gc --aggressive
         env:
           REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
 
