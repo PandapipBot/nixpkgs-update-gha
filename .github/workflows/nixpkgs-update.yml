@@ -205,9 +205,9 @@ jobs:
 
           AUTH_CRED="${USER_LOGIN}:${GITHUB_TOKEN}@"
           # shellcheck disable=SC2001 # sed is safer here
-          AUTHED_ORIGIN_URL="$(echo "$ORIGIN_URL" | sed "s#https://#https://$AUTH_CRED#")"
+          AUTHED_ORIGIN_URL="$(echo "$ORIGIN_URL" | sed -E "s#^[a-zA-Z]+://#https://$AUTH_CRED#")"
           # shellcheck disable=SC2001 # sed is safer here
-          AUTHED_TEMPLATE_URL="$(echo "$TEMPLATE_URL" | sed "s#https://#https://$AUTH_CRED#")"
+          AUTHED_TEMPLATE_URL="$(echo "$TEMPLATE_URL" | sed -E "s#^[a-zA-Z]+://#https://$AUTH_CRED#")"
 
           cd "$(mktemp -d)"
 
@@ -226,7 +226,7 @@ jobs:
           USER_NAME: ${{ needs.get-github-info.outputs.user_name }}
           USER_EMAIL: ${{ needs.get-github-info.outputs.user_email }}
           USER_LOGIN: ${{ needs.get-github-info.outputs.user_login }}
-          ORIGIN_URL: ${{ github.repositoryUrl }}
+          ORIGIN_URL: https://github.com/${{ github.repository }}.git
           ORIGIN_BRANCH: ${{ needs.get-github-info.outputs.origin_branch }}
           TEMPLATE_URL: ${{ needs.get-github-info.outputs.template_url }}
           TEMPLATE_BRANCH: ${{ needs.get-github-info.outputs.template_branch }}
