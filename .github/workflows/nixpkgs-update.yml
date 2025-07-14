@@ -171,6 +171,8 @@ jobs:
         run: |
           set -euxo pipefail
 
+          git config --global gc.auto false
+
           mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
           if [ ! -d "$NIXPKGS_LOCATION" ]; then
             git clone "$REPO_URL" "$NIXPKGS_LOCATION"
@@ -178,7 +180,11 @@ jobs:
           fi
           git -C "$NIXPKGS_LOCATION" fetch upstream
           git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
-          git -C "$NIXPKGS_LOCATION" gc --aggressive
+
+          # Like git gc --aggressive but reuses some existing data at the cost of an insignificant amount of space
+          git -C "$NIXPKGS_LOCATION" repack -adf --depth=50 --window=100
+          git -C "$NIXPKGS_LOCATION" reflog expire --expire=now --all
+          git -C "$NIXPKGS_LOCATION" prune --expire=now
         env:
           REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
 
