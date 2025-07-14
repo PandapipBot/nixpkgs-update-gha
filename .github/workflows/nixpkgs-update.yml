@@ -135,7 +135,7 @@ jobs:
           else
             IS_TEMPLATE_REPO="false"
             TEMPLATE_DEFAULT_BRANCH="$(echo "$REPO_INFO" | jq -r '.template_repository.default_branch')"
-            TEMPLATE_FULL_NAME="$(echo "$RESP" | jq -r '.template_repository.full_name')"
+            TEMPLATE_FULL_NAME="$(echo "$REPO_INFO" | jq -r '.template_repository.full_name')"
           fi
 
           {
