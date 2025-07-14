@@ -89,7 +89,7 @@ jobs:
             "${{ matrix.package }} ${{ steps.pkgdata.outputs.old_version }} ${{ steps.pkgdata.outputs.new_version }}" \
             --nixpkgs-path ~/.cache/nixpkgs
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
   get-user-info:
     runs-on: ubuntu-latest
@@ -148,7 +148,7 @@ jobs:
             echo "repo_url=$REPO_URL"
           } >> "$GITHUB_OUTPUT"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
   prepare-nixpkgs-cache:
     runs-on: ubuntu-latest
