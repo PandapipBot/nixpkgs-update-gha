@@ -24,8 +24,9 @@ jobs:
   update-package:
     runs-on: ubuntu-latest
     needs:
-      - get-user-info
+      - get-github-info
       - prepare-nixpkgs-cache
+    if: needs.get-github-info.outputs.is_template_repo == 'false'
     strategy:
       fail-fast: false
       matrix:
@@ -91,15 +92,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
-  get-user-info:
+  get-github-info:
     runs-on: ubuntu-latest
     outputs:
       user_login: ${{ steps.extract.outputs.user_login }}
       user_name: ${{ steps.extract.outputs.user_name }}
       user_email: ${{ steps.extract.outputs.user_email }}
       repo_url: ${{ steps.extract.outputs.repo_url }}
+      origin_branch: ${{ steps.extract.outputs.origin_branch }}
+      is_template_repo: ${{ steps.extract.outputs.is_template_repo }}
+      template_url: ${{ steps.extract.outputs.template_url }}
+      template_branch: ${{ steps.extract.outputs.template_branch }}
+      template_full_name: ${{ steps.extract.outputs.template_full_name }}
     steps:
-      - name: Get user info from GitHub API
+      - name: Get information from GitHub API
         id: extract
         shell: bash
         run: |
@@ -112,28 +118,22 @@ jobs:
 
           if [ -z "$LOGIN" ]; then
             if [ -z "$USER_INFO" ]; then
-              export USER_INFO
               USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
             fi
-            export LOGIN
             LOGIN="$(echo "$USER_INFO" | jq -r .login)"
           fi
 
           if [ -z "$NAME" ]; then
             if [ -z "$USER_INFO" ]; then
-              export USER_INFO
               USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
             fi
-            export NAME
             NAME="$(echo "$USER_INFO" | jq -r .name)"
           fi
 
           if [ -z "$EMAIL" ]; then
-            export EMAIL
             EMAIL="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user/emails | jq -r '.[] | select(.primary and .verified) | .email')"
           fi
           if [ -z "$EMAIL" ]; then
-            export EMAIL
             EMAIL="${LOGIN}@users.noreply.github.com"
           fi
 
@@ -141,19 +141,61 @@ jobs:
             REPO_URL="https://github.com/$LOGIN/nixpkgs.git"
           fi
 
+          if [ -z "$ORIGIN_DEFAULT_BRANCH" ]; then
+            if [ -z "$REPO_INFO" ]; then
+              REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
+            fi
+            ORIGIN_DEFAULT_BRANCH=$(echo "$REPO_INFO" | jq -r '.default_branch')
+          fi
+
+          if [ -z "$TEMPLATE_URL" ]; then
+            if [ -z "$REPO_INFO" ]; then
+              REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
+            fi
+            TEMPLATE_URL=$(echo "$REPO_INFO" | jq -r '.template_repository.clone_url // empty')
+          fi
+          if [ -z "$TEMPLATE_URL" ]; then
+            IS_TEMPLATE_REPO="true"
+            TEMPLATE_DEFAULT_BRANCH="_"
+            TEMPLATE_FULL_NAME="_"
+          else
+            IS_TEMPLATE_REPO="false"
+
+            if [ -z "$TEMPLATE_DEFAULT_BRANCH" ]; then
+              if [ -z "$REPO_INFO" ]; then
+                REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
+              fi
+              TEMPLATE_DEFAULT_BRANCH=$(echo "$REPO_INFO" | jq -r '.template_repository.default_branch // empty')
+            fi
+
+            if [ -z "$TEMPLATE_FULL_NAME" ]; then
+              if [ -z "$REPO_INFO" ]; then
+                REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
+              fi
+              TEMPLATE_FULL_NAME=$(echo "$RESP" | jq -r '.template_repository.full_name // empty')
+            fi
+          fi
+
           {
             echo "user_login=$LOGIN"
             echo "user_name=$NAME"
             echo "user_email=$EMAIL"
             echo "repo_url=$REPO_URL"
+            echo "origin_branch=$ORIGIN_DEFAULT_BRANCH"
+            echo "is_template_repo=$IS_TEMPLATE_REPO"
+            echo "template_url=$TEMPLATE_URL"
+            echo "template_branch=$TEMPLATE_DEFAULT_BRANCH"
+            echo "template_full_name=$TEMPLATE_FULL_NAME"
           } >> "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          REPO_STUB: ${{ github.repository }}
 
   prepare-nixpkgs-cache:
     runs-on: ubuntu-latest
     needs:
-      - get-user-info
+      - get-github-info
+    if: needs.get-github-info.outputs.is_template_repo == 'false'
     steps:
       - name: Restore nixpkgs cache
         id: cache
@@ -167,7 +209,7 @@ jobs:
         run: |
           set -euxo pipefail
 
-          mkdir -p $(dirname "$NIXPKGS_LOCATION")
+          mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
           if [ ! -d nixpkgs ]; then
             git clone "$REPO_URL" "$NIXPKGS_LOCATION"
             git remote add upstream "$UPSTREAM_REPO_URL" || git remote set-url upstream "$UPSTREAM_REPO_URL"
@@ -177,10 +219,53 @@ jobs:
           git reset --hard upstream/master
           git gc --aggressive
         env:
-          REPO_URL: ${{ needs.get-user-info.outputs.repo_url }}
+          REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
 
       - name: Save nixpkgs cache
         uses: actions/cache/save@v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
+
+  rebase-on-template:
+    runs-on: ubuntu-latest
+    needs:
+      - get-github-info
+    if: needs.get-github-info.outputs.is_template_repo == 'false'
+    steps:
+      - name: Rebase on template repo
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          git config --global user.name "$USER_NAME"
+          git config --global user.email "$USER_EMAIL"
+
+          AUTH_CRED="${USER_LOGIN}:${GITHUB_TOKEN}@"
+          # shellcheck disable=SC2001 # sed is safer here
+          AUTHED_ORIGIN_URL="$(echo "$ORIGIN_URL" | sed "s#https://#https://$AUTH_CRED#")"
+          # shellcheck disable=SC2001 # sed is safer here
+          AUTHED_TEMPLATE_URL="$(echo "$TEMPLATE_URL" | sed "s#https://#https://$AUTH_CRED#")"
+
+          cd "$(mktemp -d)"
+
+          git init
+
+          git remote add origin "$AUTHED_ORIGIN_URL" || git remote set-url template "$AUTHED_ORIGIN_URL"
+          git remote add template "$AUTHED_TEMPLATE_URL" || git remote set-url template "$AUTHED_TEMPLATE_URL"
+          git fetch template "$TEMPLATE_BRANCH"
+          git fetch origin "$ORIGIN_BRANCH"
+
+          git checkout origin/main
+          git rebase "template/$TEMPLATE_BRANCH"
+
+          git push --force --set-upstream origin "$ORIGIN_BRANCH"
+        env:
+          USER_NAME: ${{ needs.get-github-info.outputs.user_name }}
+          USER_EMAIL: ${{ needs.get-github-info.outputs.user_email }}
+          USER_LOGIN: ${{ needs.get-github-info.outputs.user_login }}
+          ORIGIN_URL: ${{ github.repositoryUrl }}
+          ORIGIN_BRANCH: ${{ needs.get-github-info.outputs.origin_branch }}
+          TEMPLATE_URL: ${{ needs.get-github-info.outputs.template_url }}
+          TEMPLATE_BRANCH: ${{ needs.get-github-info.outputs.template_branch }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
