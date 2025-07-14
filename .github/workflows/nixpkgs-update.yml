@@ -1,0 +1,186 @@
+# SPDX-License-Identifier: WTFPL
+name: nixpkgs-update GitHub Action
+
+# Needed by detsys nix installer and magic nix cache
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+env:
+  # Don't touch these unless you know what you're doing
+  CACHE_KEY: nixpkgs-cache-v1
+  NIXPKGS_LOCATION: ~/.cache/nixpkgs
+  UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
+
+  # Set this to e.g. "SomeOtherRepo/nixpkgs" if you're using a different repository name other than <login>/nixpkgs
+  REPO_URL: ""
+
+jobs:
+  update-package:
+    runs-on: ubuntu-latest
+    needs:
+      - get-user-info
+      - prepare-nixpkgs-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          # Add your packages here, by attrpath, e.g: python3Packages.yourpackage
+          - 
+
+    steps:
+      - if: ${{ !matrix.package }}
+        run: exit 1
+
+      - name: Restore nixpkgs cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NIXPKGS_LOCATION }}
+          key: ${{ env.CACHE_KEY }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v18
+        with:
+          diagnostic-endpoint: "" # Disable the telemetry by default. If you want to opt-in, just remove this line.
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v12
+        with:
+          diagnostic-endpoint: "" # Disable the telemetry by default. If you want to opt-in, just remove this line.
+          use-flakehub: false
+
+      - name: Get Package Data
+        id: pkgdata
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          export UPDATE_NIX_NAME
+          UPDATE_NIX_NAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getName ${{ matrix.package }}" | tr -d '"')"
+          export UPDATE_NIX_PNAME
+          UPDATE_NIX_PNAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; ${{ matrix.package }}.pname" | tr -d '"')"
+          export UPDATE_NIX_OLD_VERSION
+          UPDATE_NIX_OLD_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion ${{ matrix.package }}" | tr -d '"')"
+          export UPDATE_NIX_ATTR_PATH
+          UPDATE_NIX_ATTR_PATH="${{ matrix.package }}"
+          
+          export UPDATE_SCRIPT
+          UPDATE_SCRIPT="$(nix eval --impure --expr '(import <nixpkgs/lib>).concatStringsSep " " (import <nixpkgs> { }).python3Packages.optree.updateScript' | tr -d '"')"
+          # TODO: This requires a bunch of stuff from master to be in the binary cache
+          nix develop --impure --expr "import $NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path ${{ matrix.package }} --argstr skip-prompt true --argstr commit false
+          export UPDATE_NIX_NEW_VERSION
+          UPDATE_NIX_NEW_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion ${{ matrix.package }}" | tr -d '"')"
+
+          echo "old_version=$UPDATE_NIX_OLD_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_version=$UPDATE_NIX_NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: nixpkgs-update
+        shell: bash
+        run: |
+          nix develop .#nixpkgs-update-gha --command nixpkgs-update \
+            --pr \
+            --cve \
+            --nixpkgs-review \
+            "${{ matrix.package }} ${{ steps.pkgdata.outputs.old_version }} ${{ steps.pkgdata.outputs.new_version }}" \
+            --nixpkgs-path ~/.cache/nixpkgs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+
+  get-user-info:
+    runs-on: ubuntu-latest
+    outputs:
+      user_login: ${{ steps.extract.outputs.user_login }}
+      user_name: ${{ steps.extract.outputs.user_name }}
+      user_email: ${{ steps.extract.outputs.user_email }}
+      repo_url: ${{ steps.extract.outputs.repo_url }}
+    steps:
+      - name: Get user info from GitHub API
+        id: extract
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          if [ -z "$GITHUB_TOKEN" ]; then
+            echo "::error file=README.md,title=No PAT Configured::A PAT has not been added to this repository's secrets. Please follow the directions in the README file at the root of this repository."
+            exit 1
+          fi
+
+          if [ -z "$LOGIN" ]; then
+            if [ -z "$USER_INFO" ]; then
+              export USER_INFO
+              USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
+            fi
+            export LOGIN
+            LOGIN="$(echo "$USER_INFO" | jq -r .login)"
+          fi
+
+          if [ -z "$NAME" ]; then
+            if [ -z "$USER_INFO" ]; then
+              export USER_INFO
+              USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
+            fi
+            export NAME
+            NAME="$(echo "$USER_INFO" | jq -r .name)"
+          fi
+
+          if [ -z "$EMAIL" ]; then
+            export EMAIL
+            EMAIL="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user/emails | jq -r '.[] | select(.primary and .verified) | .email')"
+          fi
+          if [ -z "$EMAIL" ]; then
+            export EMAIL
+            EMAIL="${LOGIN}@users.noreply.github.com"
+          fi
+
+          if [ -z "$REPO_URL" ]; then
+            REPO_URL="https://github.com/$LOGIN/nixpkgs.git"
+          fi
+
+          {
+            echo "user_login=$LOGIN"
+            echo "user_name=$NAME"
+            echo "user_email=$EMAIL"
+            echo "repo_url=$REPO_URL"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+
+  prepare-nixpkgs-cache:
+    runs-on: ubuntu-latest
+    needs:
+      - get-user-info
+    steps:
+      - name: Restore nixpkgs cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NIXPKGS_LOCATION }}
+          key: ${{ env.CACHE_KEY }}
+
+      - name: Update nixpkgs
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          mkdir -p $(dirname "$NIXPKGS_LOCATION")
+          if [ ! -d nixpkgs ]; then
+            git clone "$REPO_URL" "$NIXPKGS_LOCATION"
+            git remote add upstream "$UPSTREAM_REPO_URL" || git remote set-url upstream "$UPSTREAM_REPO_URL"
+          fi
+          cd "$NIXPKGS_LOCATION"
+          git fetch upstream
+          git reset --hard upstream/master
+          git gc --aggressive
+        env:
+          REPO_URL: ${{ needs.get-user-info.outputs.repo_url }}
+
+      - name: Save nixpkgs cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.NIXPKGS_LOCATION }}
+          key: ${{ env.CACHE_KEY }}
