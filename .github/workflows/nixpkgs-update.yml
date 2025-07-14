@@ -111,69 +111,31 @@ jobs:
         run: |
           set -euxo pipefail
 
-          if [ -z "$GITHUB_TOKEN" ]; then
+          if [ -z "${GITHUB_TOKEN:-""}" ]; then
             echo "::error file=README.md,title=No PAT Configured::A PAT has not been added to this repository's secrets. Please follow the directions in the README file at the root of this repository."
             exit 1
           fi
 
-          if [ -z "$LOGIN" ]; then
-            if [ -z "$USER_INFO" ]; then
-              USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
-            fi
-            LOGIN="$(echo "$USER_INFO" | jq -r .login)"
-          fi
+          USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
+          EMAIL_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user/emails)"
+          REPO_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")"
 
-          if [ -z "$NAME" ]; then
-            if [ -z "$USER_INFO" ]; then
-              USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
-            fi
-            NAME="$(echo "$USER_INFO" | jq -r .name)"
-          fi
+          LOGIN="${LOGIN:-$(echo "$USER_INFO" | jq -r .login)}"
+          NAME="${NAME:-$(echo "$USER_INFO" | jq -r .name)}"
+          EMAIL="${EMAIL:-$(echo "$EMAIL_INFO" | jq -r '.[] | select(.primary and .verified) | .email // empty')}"
+          EMAIL="${EMAIL:-"${LOGIN}@users.noreply.github.com"}"
+          REPO_URL="${REPO_URL:-"https://github.com/$LOGIN/nixpkgs.git"}"
+          ORIGIN_DEFAULT_BRANCH="$(echo "$REPO_INFO" | jq -r '.default_branch')"
+          TEMPLATE_URL=$(echo "$REPO_INFO" | jq -r '.template_repository.clone_url // empty')
 
-          if [ -z "$EMAIL" ]; then
-            EMAIL="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user/emails | jq -r '.[] | select(.primary and .verified) | .email')"
-          fi
-          if [ -z "$EMAIL" ]; then
-            EMAIL="${LOGIN}@users.noreply.github.com"
-          fi
-
-          if [ -z "$REPO_URL" ]; then
-            REPO_URL="https://github.com/$LOGIN/nixpkgs.git"
-          fi
-
-          if [ -z "$ORIGIN_DEFAULT_BRANCH" ]; then
-            if [ -z "$REPO_INFO" ]; then
-              REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
-            fi
-            ORIGIN_DEFAULT_BRANCH=$(echo "$REPO_INFO" | jq -r '.default_branch')
-          fi
-
-          if [ -z "$TEMPLATE_URL" ]; then
-            if [ -z "$REPO_INFO" ]; then
-              REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
-            fi
-            TEMPLATE_URL=$(echo "$REPO_INFO" | jq -r '.template_repository.clone_url // empty')
-          fi
           if [ -z "$TEMPLATE_URL" ]; then
             IS_TEMPLATE_REPO="true"
             TEMPLATE_DEFAULT_BRANCH="_"
             TEMPLATE_FULL_NAME="_"
           else
             IS_TEMPLATE_REPO="false"
-
-            if [ -z "$TEMPLATE_DEFAULT_BRANCH" ]; then
-              if [ -z "$REPO_INFO" ]; then
-                REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
-              fi
-              TEMPLATE_DEFAULT_BRANCH=$(echo "$REPO_INFO" | jq -r '.template_repository.default_branch // empty')
-            fi
-
-            if [ -z "$TEMPLATE_FULL_NAME" ]; then
-              if [ -z "$REPO_INFO" ]; then
-                REPO_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_STUB")
-              fi
-              TEMPLATE_FULL_NAME=$(echo "$RESP" | jq -r '.template_repository.full_name // empty')
-            fi
+            TEMPLATE_DEFAULT_BRANCH="$(echo "$REPO_INFO" | jq -r '.template_repository.default_branch')"
+            TEMPLATE_FULL_NAME="$(echo "$RESP" | jq -r '.template_repository.full_name')"
           fi
 
           {
