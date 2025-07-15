@@ -37,7 +37,9 @@ jobs:
 
     steps:
       - if: ${{ !matrix.package }}
-        run: exit 1
+        run: |
+          echo "::error file=README.md,title=No Repositories Configured::No repositories have been added to `nixpkgs-update.yml`. Please follow the directions in the README file at the root of this repository."
+          exit 1
 
       - name: Restore nixpkgs cache
         uses: actions/cache@v4
@@ -102,7 +104,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
   get-github-info:
-    name: Fetch basic info from GH API
+    name: Fetch basic info
     runs-on: ubuntu-latest
     outputs:
       user_login: ${{ steps.extract.outputs.user_login }}
@@ -202,7 +204,7 @@ jobs:
           key: ${{ env.CACHE_KEY }}
 
   compress-nixpkgs-cache:
-    name: Compress nixpkgs to avoid 
+    name: Compress nixpkgs
     runs-on: ubuntu-latest
     needs:
       - get-github-info
