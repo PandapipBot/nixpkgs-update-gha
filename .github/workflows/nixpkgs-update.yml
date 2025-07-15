@@ -38,7 +38,7 @@ jobs:
     steps:
       - if: ${{ !matrix.package }}
         run: |
-          echo "::error file=README.md,title=No Repositories Configured::No repositories have been added to `nixpkgs-update.yml`. Please follow the directions in the README file at the root of this repository."
+          echo "::error file=README.md,title=No Repositories Configured::No repositories have been added to `nixpkgs-update.yml`. Please follow the directions in the README file at the root of this repository." 1>&2
           exit 1
 
       - name: Restore nixpkgs cache
@@ -124,7 +124,7 @@ jobs:
           set -euxo pipefail
 
           if [ -z "${GITHUB_TOKEN:-""}" ]; then
-            echo "::error file=README.md,title=No PAT Configured::A PAT has not been added to this repository's secrets. Please follow the directions in the README file at the root of this repository."
+            echo "::error file=README.md,title=No PAT Configured::A PAT has not been added to this repository's secrets. Please follow the directions in the README file at the root of this repository." 1>&2
             exit 1
           fi
 
@@ -188,9 +188,11 @@ jobs:
 
           mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
           if [ ! -d "$NIXPKGS_LOCATION" ]; then
+            echo "::notice title=First Run::This is the first time this workflow is being run. Since the size of nixpkgs is over the cache limit, it will need to be compressed. This will take a long time."
             git clone "$REPO_URL" "$NIXPKGS_LOCATION"
             git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_REPO_URL"
-            git gc --aggressive # Needed for first run, as otherwise nixpkgs is too large for the cache
+            # Needed for first run, as otherwise nixpkgs is too large for the cache
+            git -C "$NIXPKGS_LOCATION" gc --aggressive
           fi
           git -C "$NIXPKGS_LOCATION" fetch upstream
           git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
@@ -234,7 +236,7 @@ jobs:
           git config --global repack.writeBitmaps true
 
           # Like git gc --aggressive but reuses some existing data at the cost of an insignificant amount of space
-          git -C "$NIXPKGS_LOCATION" repack -ad --depth=16 --window=10 --window-memory=8g
+          git -C "$NIXPKGS_LOCATION" repack -ad --depth=50 --window=100 --window-memory=8g
           git -C "$NIXPKGS_LOCATION" reflog expire --expire=now --all
           git -C "$NIXPKGS_LOCATION" prune --expire=now
           git -C "$NIXPKGS_LOCATION" commit-graph write --reachable --changed-paths
