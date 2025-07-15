@@ -237,6 +237,15 @@ jobs:
       - get-github-info
     if: needs.get-github-info.outputs.is_template_repo == 'false'
     steps:
+      - name: Checkout origin repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ needs.get-github-info.outputs.origin_branch }}
+          fetch-depth: 0  # Needed for rebase
+          path: ${{ env.ORIGIN_LOCATION }}
+          token: ${{ secrets.GH_PAT }}
+
       - name: Rebase on template repo
         shell: bash
         run: |
@@ -247,26 +256,15 @@ jobs:
           git config --global user.name "$USER_NAME"
           git config --global user.email "$USER_EMAIL"
 
-          AUTH_CRED="${USER_LOGIN}:${GITHUB_TOKEN}@"
-          # shellcheck disable=SC2001 # sed is safer here
-          AUTHED_ORIGIN_URL="$(echo "$ORIGIN_URL" | sed -E "s#^[a-zA-Z]+://#https://$AUTH_CRED#")"
-          # shellcheck disable=SC2001 # sed is safer here
-          AUTHED_TEMPLATE_URL="$(echo "$TEMPLATE_URL" | sed -E "s#^[a-zA-Z]+://#https://$AUTH_CRED#")"
+          pushd "${GITHUB_WORKSPACE%/}/${ORIGIN_LOCATION#/}"
 
-          cd "$(mktemp -d)"
-
-          git init
-
-          git remote add origin "$AUTHED_ORIGIN_URL" || git remote set-url template "$AUTHED_ORIGIN_URL"
-          git fetch origin
-
-          git remote add template "$AUTHED_TEMPLATE_URL" || git remote set-url template "$AUTHED_TEMPLATE_URL"
+          git remote add template "$TEMPLATE_URL" || git remote set-url template "$TEMPLATE_URL"
           git fetch template
 
           if [ "$(git merge-base "origin/$ORIGIN_BRANCH" "template/$TEMPLATE_BRANCH")" != "$(git rev-parse "template/$TEMPLATE_BRANCH")" ]; then
             git checkout "origin/$ORIGIN_BRANCH"
             git rebase "template/$TEMPLATE_BRANCH"
-            git push --force origin "$ORIGIN_BRANCH"
+            git push --force origin "HEAD:$ORIGIN_BRANCH"
           fi
         env:
           USER_NAME: ${{ needs.get-github-info.outputs.user_name }}
