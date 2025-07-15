@@ -38,7 +38,7 @@ jobs:
     steps:
       - if: ${{ !matrix.package }}
         run: |
-          echo "::error file=README.md,title=No Repositories Configured::No repositories have been added to `nixpkgs-update.yml`. Please follow the directions in the README file at the root of this repository." 1>&2
+          echo "::error file=README.md,title=No Repositories Configured::No repositories have been added to nixpkgs-update.yml. Please follow the directions in the README file at the root of this repository." 1>&2
           exit 1
 
       - name: Restore nixpkgs cache
