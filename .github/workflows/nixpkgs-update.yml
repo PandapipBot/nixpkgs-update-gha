@@ -14,6 +14,7 @@ on:
 env:
   # Don't touch these unless you know what you're doing
   CACHE_KEY: nixpkgs-cache-v1
+  COMPRESSED_CACHE_KEY: nixpkgs-cache-compressed-v1
   NIXPKGS_LOCATION: /home/runner/.cache/nixpkgs
   UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
 
@@ -177,7 +178,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
-          key: ${{ env.CACHE_KEY }}
+          key: ${{ env.COMPRESSED_CACHE_KEY }}
+          restore-keys: |
+            ${{ env.CACHE_KEY }}
 
       - name: Update nixpkgs
         shell: bash
@@ -230,7 +233,8 @@ jobs:
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
-
+          restore-keys: |
+            ${{ env.COMPRESSED_CACHE_KEY }}
       - name: Compress nixpkgs
         shell: bash
         run: |
@@ -258,7 +262,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
-          key: ${{ env.CACHE_KEY }}
+          key: ${{ env.COMPRESSED_CACHE_KEY }}
 
   rebase-on-template:
     runs-on: ubuntu-latest
