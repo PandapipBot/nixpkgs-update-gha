@@ -43,24 +43,24 @@ jobs:
           exit 1
 
       - name: Restore nixpkgs cache
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
       
       - name: Checkout nixpkgs-review-gha
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           path: ${{ env.ORIGIN_LOCATION }}
           token: ${{ secrets.GH_PAT }}
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v18
+        uses: DeterminateSystems/nix-installer-action@c723f3a885e3f1d866d91f4f0c33dd44b1fc7c60 # v18
         with:
           diagnostic-endpoint: "" # Disable the telemetry by default. If you want to opt-in, just remove this line.
 
       - name: Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v12
+        uses: DeterminateSystems/magic-nix-cache-action@e1c1dae8e170ed20fd2e6aaf9979ca2d3905d636 # v12
         with:
           diagnostic-endpoint: "" # Disable the telemetry by default. If you want to opt-in, just remove this line.
           use-flakehub: false
@@ -181,7 +181,7 @@ jobs:
     steps:
       - name: Restore nixpkgs cache
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
@@ -226,7 +226,7 @@ jobs:
           REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
 
       - name: Save nixpkgs cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
@@ -238,7 +238,7 @@ jobs:
     if: needs.get-github-info.outputs.is_template_repo == 'false'
     steps:
       - name: Checkout origin repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           repository: ${{ github.repository }}
           ref: ${{ needs.get-github-info.outputs.origin_branch }}
