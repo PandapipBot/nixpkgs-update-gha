@@ -14,7 +14,7 @@ on:
 env:
   # Don't touch these unless you know what you're doing
   CACHE_KEY: nixpkgs-cache-v1
-  NIXPKGS_LOCATION: ~/.cache/nixpkgs
+  NIXPKGS_LOCATION: $HOME/.cache/nixpkgs
   UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
 
   # Set this to e.g. "SomeOtherRepo/nixpkgs" if you're using a different repository name other than <login>/nixpkgs
@@ -22,6 +22,7 @@ env:
 
 jobs:
   update-package:
+    name: Run nixpkgs-update for ${{ matrix.package }}
     runs-on: ubuntu-latest
     needs:
       - get-github-info
@@ -61,6 +62,8 @@ jobs:
         run: |
           set -euxo pipefail
 
+          NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
+
           export UPDATE_NIX_NAME
           UPDATE_NIX_NAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getName ${{ matrix.package }}" | tr -d '"')"
           export UPDATE_NIX_PNAME
@@ -83,16 +86,23 @@ jobs:
       - name: nixpkgs-update
         shell: bash
         run: |
+          set -euxo pipefail
+
+          NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
+
+          pushd "$NIXPKGS_LOCATION"
           nix develop .#nixpkgs-update-gha --command nixpkgs-update \
             --pr \
             --cve \
             --nixpkgs-review \
             "${{ matrix.package }} ${{ steps.pkgdata.outputs.old_version }} ${{ steps.pkgdata.outputs.new_version }}" \
-            --nixpkgs-path ~/.cache/nixpkgs
+            --nixpkgs-path ""
+          popd
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
   get-github-info:
+    name: Fetch basic info from GH API
     runs-on: ubuntu-latest
     outputs:
       user_login: ${{ steps.extract.outputs.user_login }}
@@ -154,6 +164,7 @@ jobs:
           REPO_STUB: ${{ github.repository }}
 
   prepare-nixpkgs-cache:
+    name: Fetch latest nixpkgs
     runs-on: ubuntu-latest
     needs:
       - get-github-info
@@ -171,6 +182,47 @@ jobs:
         run: |
           set -euxo pipefail
 
+          NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
+
+          mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
+          if [ ! -d "$NIXPKGS_LOCATION" ]; then
+            git clone "$REPO_URL" "$NIXPKGS_LOCATION"
+            git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_REPO_URL"
+            git gc --aggressive # Needed for first run, as otherwise nixpkgs is too large for the cache
+          fi
+          git -C "$NIXPKGS_LOCATION" fetch upstream
+          git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
+        env:
+          REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
+
+      - name: Save nixpkgs cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.NIXPKGS_LOCATION }}
+          key: ${{ env.CACHE_KEY }}
+
+  compress-nixpkgs-cache:
+    name: Compress nixpkgs to avoid 
+    runs-on: ubuntu-latest
+    needs:
+      - get-github-info
+      - prepare-nixpkgs-cache
+    if: needs.get-github-info.outputs.is_template_repo == 'false'
+    steps:
+      - name: Restore nixpkgs cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NIXPKGS_LOCATION }}
+          key: ${{ env.CACHE_KEY }}
+
+      - name: Compress nixpkgs
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
+
           git config --global gc.auto 0
           git config --global gc.writeCommitGraph true
           git config --global core.compression 1
@@ -178,14 +230,6 @@ jobs:
           git config --global pack.compression 1
           git config --global pack.threads "$(nproc)"
           git config --global repack.writeBitmaps true
-
-          mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
-          if [ ! -d "$NIXPKGS_LOCATION" ]; then
-            git clone "$REPO_URL" "$NIXPKGS_LOCATION"
-            git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_REPO_URL"
-          fi
-          git -C "$NIXPKGS_LOCATION" fetch upstream
-          git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
 
           # Like git gc --aggressive but reuses some existing data at the cost of an insignificant amount of space
           git -C "$NIXPKGS_LOCATION" repack -ad --depth=16 --window=10 --window-memory=8g
