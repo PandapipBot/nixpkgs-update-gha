@@ -14,7 +14,7 @@ on:
 env:
   # Don't touch these unless you know what you're doing
   CACHE_KEY: nixpkgs-cache-v1
-  NIXPKGS_LOCATION: $HOME/.cache/nixpkgs
+  NIXPKGS_LOCATION: /home/runner/.cache/nixpkgs
   UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
 
   # Set this to e.g. "SomeOtherRepo/nixpkgs" if you're using a different repository name other than <login>/nixpkgs
