@@ -15,6 +15,7 @@ env:
   # Don't touch these unless you know what you're doing
   CACHE_KEY: nixpkgs-cache-v1
   NIXPKGS_LOCATION: /home/runner/.cache/nixpkgs
+  ORIGIN_LOCATION: nixpkgs-review-gha
   UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
 
   # Set this to e.g. "SomeOtherRepo/nixpkgs" if you're using a different repository name other than <login>/nixpkgs
@@ -46,6 +47,12 @@ jobs:
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
+      
+      - name: Checkout nixpkgs-review-gha
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.ORIGIN_LOCATION }}
+          token: ${{ secrets.GH_PAT }}
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v18
@@ -93,7 +100,7 @@ jobs:
           NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
 
           pushd "$NIXPKGS_LOCATION"
-          nix develop .#nixpkgs-update-gha --command nixpkgs-update \
+          nix develop "${GITHUB_WORKSPACE%/}/${ORIGIN_LOCATION#/}#nixpkgs-update-gha" --command nixpkgs-update \
             --pr \
             --cve \
             --nixpkgs-review \
