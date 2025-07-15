@@ -102,7 +102,7 @@ jobs:
           NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
 
           pushd "$NIXPKGS_LOCATION"
-          nix develop "${GITHUB_WORKSPACE%/}/${ORIGIN_LOCATION#/}#nixpkgs-update-gha"# --command bash -c "nixpkgs-update update \
+          nix develop "${GITHUB_WORKSPACE%/}/${ORIGIN_LOCATION#/}#nixpkgs-update-gha" --command bash -c "nixpkgs-update update \
             --pr \
             --cve \
             --nixpkgs-review \
