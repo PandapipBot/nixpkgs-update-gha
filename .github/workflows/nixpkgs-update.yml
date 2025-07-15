@@ -36,8 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          # Add your packages here, by attrpath, e.g: python3Packages.yourpackage
-          - 
+          - python3Packages.optree
 
     steps:
       - if: ${{ !matrix.package }}
