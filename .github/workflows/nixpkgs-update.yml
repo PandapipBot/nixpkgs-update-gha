@@ -14,7 +14,6 @@ on:
 env:
   # Don't touch these unless you know what you're doing
   CACHE_KEY: nixpkgs-cache-v1
-  COMPRESSED_CACHE_KEY: nixpkgs-cache-compressed-v1
   NIXPKGS_LOCATION: /home/runner/.cache/nixpkgs
   UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
 
@@ -178,9 +177,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
-          key: ${{ env.COMPRESSED_CACHE_KEY }}
-          restore-keys: |
-            ${{ env.CACHE_KEY }}
+          key: ${{ env.CACHE_KEY }}
 
       - name: Update nixpkgs
         shell: bash
@@ -206,10 +203,18 @@ jobs:
           git -C "$NIXPKGS_LOCATION" fetch upstream
           git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
 
-          # Needed for first run, as otherwise nixpkgs is too large for the cache (~6 gigs uncompressed, ~2 compressed)
           if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
-            git -C "$NIXPKGS_LOCATION" gc --aggressive
+            # On the first run we can afford to be more aggressive with optimizing
+            git gc --aggressive
+          else
+            # Like git gc --aggressive but reuses some existing data at the cost of an insignificant amount of space
+            git -C "$NIXPKGS_LOCATION" repack -ad --depth=50 --window=100 --window-memory=8g
+            git -C "$NIXPKGS_LOCATION" reflog expire --expire=now --all
+            git -C "$NIXPKGS_LOCATION" prune --expire=now
           fi
+
+          # Calculate the commit graph to speed up future git operations
+          git -C "$NIXPKGS_LOCATION" commit-graph write --reachable --changed-paths --split
         env:
           REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
 
@@ -218,51 +223,6 @@ jobs:
         with:
           path: ${{ env.NIXPKGS_LOCATION }}
           key: ${{ env.CACHE_KEY }}
-
-  compress-nixpkgs-cache:
-    name: Compress nixpkgs
-    runs-on: ubuntu-latest
-    needs:
-      - get-github-info
-      - prepare-nixpkgs-cache
-    if: needs.get-github-info.outputs.is_template_repo == 'false'
-    steps:
-      - name: Restore nixpkgs cache
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.NIXPKGS_LOCATION }}
-          key: ${{ env.CACHE_KEY }}
-          restore-keys: |
-            ${{ env.COMPRESSED_CACHE_KEY }}
-      - name: Compress nixpkgs
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
-
-          git config --global gc.auto 0
-          git config --global gc.writeCommitGraph true
-          git config --global core.compression 1
-          git config --global core.commitGraph true
-          git config --global pack.compression 1
-          git config --global pack.threads "$(nproc)"
-          git config --global repack.writeBitmaps true
-
-          # Like git gc --aggressive but reuses some existing data at the cost of an insignificant amount of space
-          git -C "$NIXPKGS_LOCATION" repack -ad --depth=50 --window=100 --window-memory=8g
-          git -C "$NIXPKGS_LOCATION" reflog expire --expire=now --all
-          git -C "$NIXPKGS_LOCATION" prune --expire=now
-          git -C "$NIXPKGS_LOCATION" commit-graph write --reachable --changed-paths
-        env:
-          REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
-
-      - name: Save nixpkgs cache
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.NIXPKGS_LOCATION }}
-          key: ${{ env.COMPRESSED_CACHE_KEY }}
 
   rebase-on-template:
     runs-on: ubuntu-latest
