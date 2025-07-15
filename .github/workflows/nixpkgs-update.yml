@@ -186,16 +186,27 @@ jobs:
 
           NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
 
-          mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
+          NIXPKGS_FIRST_RUN=0
           if [ ! -d "$NIXPKGS_LOCATION" ]; then
             echo "::notice title=First Run::This is the first time this workflow is being run. Since the size of nixpkgs is over the cache limit, it will need to be compressed. This will take a long time."
+            NIXPKGS_FIRST_RUN=1
+          fi
+
+          # On first run, get ourselves a clone of nixpkgs (duh)
+          if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
+            mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
             git clone "$REPO_URL" "$NIXPKGS_LOCATION"
             git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_REPO_URL"
-            # Needed for first run, as otherwise nixpkgs is too large for the cache
-            git -C "$NIXPKGS_LOCATION" gc --aggressive
           fi
+
+          # We always want it to be up-to-date with upstream/master
           git -C "$NIXPKGS_LOCATION" fetch upstream
           git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
+
+          # Needed for first run, as otherwise nixpkgs is too large for the cache (~6 gigs uncompressed, ~2 compressed)
+          if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
+            git -C "$NIXPKGS_LOCATION" gc --aggressive
+          fi
         env:
           REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
 
