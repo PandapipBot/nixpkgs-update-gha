@@ -109,7 +109,7 @@ jobs:
             --pr \
             --cve \
             --nixpkgs-review \
-            \"${{ matrix.package }} ${{ steps.pkgdata.outputs.old_version }} ${{ steps.pkgdata.outputs.new_version }} updateScript\""
+            \"${{ matrix.package }} ${{ steps.pkgdata.outputs.old_version }} ${{ steps.pkgdata.outputs.new_version }}\""
           popd
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
