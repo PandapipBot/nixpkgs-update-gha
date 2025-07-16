@@ -84,7 +84,7 @@ jobs:
           pushd "$NIXPKGS_LOCATION"
           # TODO: This requires a bunch of stuff from master to be in the binary cache
           # TODO: Use nix develop --file instead of nix-shell
-          nix-shell "import $NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path "$PACKAGE" --argstr skip-prompt true --argstr commit false
+          nix-shell "$NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path "$PACKAGE" --argstr skip-prompt true --argstr commit false
           popd
 
           UPDATE_NIX_NEW_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion $PACKAGE" | tr -d '"')"
