@@ -78,14 +78,8 @@ jobs:
 
           NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
 
-          export UPDATE_NIX_NAME
-          UPDATE_NIX_NAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getName $PACKAGE" | tr -d '"')"
-          export UPDATE_NIX_PNAME
-          UPDATE_NIX_PNAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; $PACKAGE.pname" | tr -d '"')"
           export UPDATE_NIX_OLD_VERSION
           UPDATE_NIX_OLD_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion $PACKAGE" | tr -d '"')"
-          export UPDATE_NIX_ATTR_PATH
-          UPDATE_NIX_ATTR_PATH="$PACKAGE"
 
           # Most update scripts expect to be in the nixpkgs root
           pushd "$NIXPKGS_LOCATION"
