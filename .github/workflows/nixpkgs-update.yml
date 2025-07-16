@@ -16,10 +16,13 @@ env:
   CACHE_KEY: nixpkgs-cache-v1
   NIXPKGS_LOCATION: /home/runner/.cache/nixpkgs
   ORIGIN_LOCATION: nixpkgs-review-gha
-  UPSTREAM_REPO_URL: https://github.com/NixOS/nixpkgs.git
+  UPSTREAM_NIXPKGS_REPO_URL: https://github.com/NixOS/nixpkgs.git
 
   # Set this to e.g. "SomeOtherRepo/nixpkgs" if you're using a different repository name other than <login>/nixpkgs
-  REPO_URL: ""
+  NIXPKGS_REPO_URL: ""
+
+  # If you want, you can enable Determinate Systems' telemetry here
+  ENABLE_DETSYS_TELEM: false
 
 jobs:
   update-package:
@@ -28,7 +31,7 @@ jobs:
     needs:
       - get-github-info
       - prepare-nixpkgs-cache
-    if: needs.get-github-info.outputs.is_template_repo == 'false'
+    if: needs.get-github-info.outputs.origin_is_template == 'false'
     strategy:
       fail-fast: false
       matrix:
@@ -59,12 +62,12 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@90bb610b90bf290cad97484ba341453bd1cbefea # v19
         with:
-          diagnostic-endpoint: "" # Disable the telemetry by default. If you want to opt-in, just remove this line.
+          diagnostic-endpoint: ${{ env.ENABLE_DETSYS_TELEM && 'https://install.determinate.systems/nix-installer/diagnostic' || '' }}
 
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
         with:
-          diagnostic-endpoint: "" # Disable the telemetry by default. If you want to opt-in, just remove this line.
+          diagnostic-endpoint: ${{ env.ENABLE_DETSYS_TELEM && 'https://install.determinate.systems/magic-nix-cache/perf' || '' }}
           use-flakehub: false
 
       - name: Get Package Data
@@ -76,28 +79,27 @@ jobs:
           NIXPKGS_LOCATION="$(echo "$NIXPKGS_LOCATION" | envsubst)"
 
           export UPDATE_NIX_NAME
-          UPDATE_NIX_NAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getName ${{ matrix.package }}" | tr -d '"')"
+          UPDATE_NIX_NAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getName $PACKAGE" | tr -d '"')"
           export UPDATE_NIX_PNAME
-          UPDATE_NIX_PNAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; ${{ matrix.package }}.pname" | tr -d '"')"
+          UPDATE_NIX_PNAME="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; $PACKAGE.pname" | tr -d '"')"
           export UPDATE_NIX_OLD_VERSION
-          UPDATE_NIX_OLD_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion ${{ matrix.package }}" | tr -d '"')"
+          UPDATE_NIX_OLD_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion $PACKAGE" | tr -d '"')"
           export UPDATE_NIX_ATTR_PATH
-          UPDATE_NIX_ATTR_PATH="${{ matrix.package }}"
-          
-          export UPDATE_SCRIPT
-          UPDATE_SCRIPT="$(nix eval --impure --expr '(import <nixpkgs/lib>).concatStringsSep " " (import <nixpkgs> { }).python3Packages.optree.updateScript' | tr -d '"')"
+          UPDATE_NIX_ATTR_PATH="$PACKAGE"
 
           # Most update scripts expect to be in the nixpkgs root
           pushd "$NIXPKGS_LOCATION"
           # TODO: This requires a bunch of stuff from master to be in the binary cache
-          nix develop --impure --expr "import $NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path ${{ matrix.package }} --argstr skip-prompt true --argstr commit false
+          nix develop --impure --expr "import $NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path "$PACKAGE" --argstr skip-prompt true --argstr commit false
           popd
 
           export UPDATE_NIX_NEW_VERSION
-          UPDATE_NIX_NEW_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion ${{ matrix.package }}" | tr -d '"')"
+          UPDATE_NIX_NEW_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion $PACKAGE" | tr -d '"')"
 
           echo "old_version=$UPDATE_NIX_OLD_VERSION" >> "$GITHUB_OUTPUT"
           echo "new_version=$UPDATE_NIX_NEW_VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          PACKAGE: ${{ matrix.package }}
 
       - name: nixpkgs-update
         shell: bash
@@ -124,9 +126,11 @@ jobs:
       user_login: ${{ steps.extract.outputs.user_login }}
       user_name: ${{ steps.extract.outputs.user_name }}
       user_email: ${{ steps.extract.outputs.user_email }}
-      repo_url: ${{ steps.extract.outputs.repo_url }}
+
+      nixpkgs_repo_url: ${{ steps.extract.outputs.nixpkgs_repo_url }}
+
       origin_branch: ${{ steps.extract.outputs.origin_branch }}
-      is_template_repo: ${{ steps.extract.outputs.is_template_repo }}
+      origin_is_template: ${{ steps.extract.outputs.origin_is_template }}
       template_url: ${{ steps.extract.outputs.template_url }}
       template_branch: ${{ steps.extract.outputs.template_branch }}
       template_full_name: ${{ steps.extract.outputs.template_full_name }}
@@ -142,40 +146,52 @@ jobs:
             GH_TOKEN_HEADER="-H Authorization: token $GITHUB_TOKEN"
           fi
 
-          USER_INFO="$(curl -s "$GH_TOKEN_HEADER" https://api.github.com/user || echo '{}')"
-          EMAIL_INFO="$(curl -s "$GH_TOKEN_HEADER" https://api.github.com/user/emails || echo '[]')"
-          REPO_INFO="$(curl -s "$GH_TOKEN_HEADER" "https://api.github.com/repos/$REPO_STUB" || echo '{}')"
+          ORIGIN_REPO_INFO="$(curl -s "$GH_TOKEN_HEADER" "https://api.github.com/repos/$REPO_STUB")"
 
-          LOGIN="${LOGIN:-$(echo "$USER_INFO" | jq -r .login)}"
-          NAME="${NAME:-$(echo "$USER_INFO" | jq -r .name)}"
-          EMAIL="${EMAIL:-$(echo "$EMAIL_INFO" | jq -r '.[] | select(.primary and .verified) | .email // empty')}"
-          EMAIL="${EMAIL:-"${LOGIN}@users.noreply.github.com"}"
-          REPO_URL="${REPO_URL:-"https://github.com/$LOGIN/nixpkgs.git"}"
-          ORIGIN_DEFAULT_BRANCH="$(echo "$REPO_INFO" | jq -r '.default_branch')"
-          TEMPLATE_URL=$(echo "$REPO_INFO" | jq -r '.template_repository.clone_url // empty')
+          ORIGIN_DEFAULT_BRANCH="$(echo "$ORIGIN_REPO_INFO" | jq -r '.default_branch')"
+          TEMPLATE_URL=$(echo "$ORIGIN_REPO_INFO" | jq -r '.template_repository.clone_url // empty')
 
           if [ -z "$TEMPLATE_URL" ]; then
             IS_TEMPLATE_REPO="true"
             TEMPLATE_DEFAULT_BRANCH="_"
             TEMPLATE_FULL_NAME="_"
+            LOGIN="_"
+            NAME="_"
+            EMAIL="_"
+            NIXPKGS_REPO_URL="_"
           else
             IS_TEMPLATE_REPO="false"
-            TEMPLATE_DEFAULT_BRANCH="$(echo "$REPO_INFO" | jq -r '.template_repository.default_branch')"
-            TEMPLATE_FULL_NAME="$(echo "$REPO_INFO" | jq -r '.template_repository.full_name')"
-          fi
+            TEMPLATE_DEFAULT_BRANCH="$(echo "$ORIGIN_REPO_INFO" | jq -r '.template_repository.default_branch')"
+            TEMPLATE_FULL_NAME="$(echo "$ORIGIN_REPO_INFO" | jq -r '.template_repository.full_name')"
 
-          if [ "$IS_TEMPLATE_REPO" = "false" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo "::error title=No PAT Configured::A PAT has not been added to this repository's secrets. Please follow the directions in the README file at the root of this repository." 1>&2
-            exit 1
+            if [ -z "${GITHUB_TOKEN:-}" ]; then
+              echo "::error title=No PAT Configured::A PAT has not been added to this repository's secrets. Please follow the directions in the README file at the root of this repository." 1>&2
+              exit 1
+            fi
+
+            USER_INFO="$(curl -s "$GH_TOKEN_HEADER" https://api.github.com/user)"
+            EMAIL_INFO="$(curl -s "$GH_TOKEN_HEADER" https://api.github.com/user/emails)"
+
+            LOGIN="${LOGIN:-$(echo "$USER_INFO" | jq -r .login)}"
+            NAME="${NAME:-$(echo "$USER_INFO" | jq -r .name)}"
+            if echo "$EMAIL_INFO" | jq -e 'type == "array"' > /dev/null; then
+              EMAIL=$(echo "$EMAIL_INFO" | jq -r '.[] | select(.primary and .verified) | .email // empty')
+            else
+              echo "::warning title=Failed to fetch email addresses::Failed to fetch email addresses belonging to the given PAT (did you make sure to include the email scope?)"
+              echo "$EMAIL_INFO"
+              EMAIL=""
+            fi
+            EMAIL="${EMAIL:-"${LOGIN}@users.noreply.github.com"}"
+            NIXPKGS_REPO_URL="${NIXPKGS_REPO_URL:-"https://github.com/$LOGIN/nixpkgs.git"}"
           fi
 
           {
             echo "user_login=$LOGIN"
             echo "user_name=$NAME"
             echo "user_email=$EMAIL"
-            echo "repo_url=$REPO_URL"
+            echo "nixpkgs_repo_url=$NIXPKGS_REPO_URL"
             echo "origin_branch=$ORIGIN_DEFAULT_BRANCH"
-            echo "is_template_repo=$IS_TEMPLATE_REPO"
+            echo "origin_is_template=$IS_TEMPLATE_REPO"
             echo "template_url=$TEMPLATE_URL"
             echo "template_branch=$TEMPLATE_DEFAULT_BRANCH"
             echo "template_full_name=$TEMPLATE_FULL_NAME"
@@ -189,7 +205,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - get-github-info
-    if: needs.get-github-info.outputs.is_template_repo == 'false'
+    if: needs.get-github-info.outputs.origin_is_template == 'false'
     steps:
       - name: Restore nixpkgs cache
         id: cache
@@ -216,8 +232,8 @@ jobs:
           # On first run, get ourselves a clone of nixpkgs (duh)
           if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
             mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
-            git clone "$REPO_URL" "$NIXPKGS_LOCATION"
-            git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_REPO_URL"
+            git clone "$NIXPKGS_REPO_URL" "$NIXPKGS_LOCATION"
+            git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_NIXPKGS_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_NIXPKGS_REPO_URL"
           fi
 
           # We always want it to be up-to-date with upstream/master
@@ -237,7 +253,7 @@ jobs:
           # Calculate the commit graph to speed up future git operations
           git -C "$NIXPKGS_LOCATION" commit-graph write --reachable --changed-paths --split
         env:
-          REPO_URL: ${{ needs.get-github-info.outputs.repo_url }}
+          NIXPKGS_REPO_URL: ${{ needs.get-github-info.outputs.nixpkgs_repo_url }}
 
       - name: Save nixpkgs cache
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
@@ -249,7 +265,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - get-github-info
-    if: needs.get-github-info.outputs.is_template_repo == 'false'
+    if: needs.get-github-info.outputs.origin_is_template == 'false'
     steps:
       - name: Checkout origin repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
