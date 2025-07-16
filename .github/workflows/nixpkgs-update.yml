@@ -86,8 +86,13 @@ jobs:
           
           export UPDATE_SCRIPT
           UPDATE_SCRIPT="$(nix eval --impure --expr '(import <nixpkgs/lib>).concatStringsSep " " (import <nixpkgs> { }).python3Packages.optree.updateScript' | tr -d '"')"
+
+          # Most update scripts expect to be in the nixpkgs root
+          pushd "$NIXPKGS_LOCATION"
           # TODO: This requires a bunch of stuff from master to be in the binary cache
           nix develop --impure --expr "import $NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path ${{ matrix.package }} --argstr skip-prompt true --argstr commit false
+          popd
+
           export UPDATE_NIX_NEW_VERSION
           UPDATE_NIX_NEW_VERSION="$(nix eval --impure --expr "with import $NIXPKGS_LOCATION {}; lib.getVersion ${{ matrix.package }}" | tr -d '"')"
 
