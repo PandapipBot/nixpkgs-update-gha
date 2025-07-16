@@ -141,12 +141,8 @@ jobs:
         run: |
           set -euxo pipefail
 
-          GH_TOKEN_HEADER=""
-          if [ -n "${GITHUB_TOKEN:-}" ]; then
-            GH_TOKEN_HEADER="-H Authorization: token $GITHUB_TOKEN"
-          fi
-
-          ORIGIN_REPO_INFO="$(curl -s "$GH_TOKEN_HEADER" "https://api.github.com/repos/$REPO_STUB")"
+          # Use GITHUB_ACTIONS_TOKEN to bypass rate limit, since it's guaranteed to exist and have read access to the repository
+          ORIGIN_REPO_INFO="$(curl -s -H "Authorization: token $GITHUB_ACTIONS_TOKEN" "https://api.github.com/repos/$REPO_STUB")"
 
           ORIGIN_DEFAULT_BRANCH="$(echo "$ORIGIN_REPO_INFO" | jq -r '.default_branch')"
           TEMPLATE_URL=$(echo "$ORIGIN_REPO_INFO" | jq -r '.template_repository.clone_url // empty')
@@ -169,8 +165,8 @@ jobs:
               exit 1
             fi
 
-            USER_INFO="$(curl -s "$GH_TOKEN_HEADER" https://api.github.com/user)"
-            EMAIL_INFO="$(curl -s "$GH_TOKEN_HEADER" https://api.github.com/user/emails)"
+            USER_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user)"
+            EMAIL_INFO="$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user/emails)"
 
             LOGIN="${LOGIN:-$(echo "$USER_INFO" | jq -r .login)}"
             NAME="${NAME:-$(echo "$USER_INFO" | jq -r .name)}"
@@ -198,6 +194,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_STUB: ${{ github.repository }}
 
   prepare-nixpkgs-cache:
