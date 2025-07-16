@@ -96,6 +96,7 @@ jobs:
 
       - name: nixpkgs-update
         shell: bash
+        if: steps.pkgdata.outputs.old_version != steps.pkgdata.outputs.new_version
         run: |
           set -euxo pipefail
 
