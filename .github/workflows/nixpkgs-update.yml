@@ -37,6 +37,8 @@ jobs:
       matrix:
         package:
           - python3Packages.optree
+          - python3Packages.kaleido
+          - python3Packages.kneaddata
 
     steps:
       - if: ${{ !matrix.package }}
