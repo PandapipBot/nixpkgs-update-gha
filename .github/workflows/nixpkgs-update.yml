@@ -54,7 +54,7 @@ jobs:
             ${{ env.CACHE_KEY }}
       
       - name: Checkout nixpkgs-review-gha
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           path: ${{ env.ORIGIN_LOCATION }}
           token: ${{ secrets.GH_PAT }}
@@ -260,7 +260,7 @@ jobs:
     if: needs.get-github-info.outputs.origin_is_template == 'false'
     steps:
       - name: Checkout origin repo
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           repository: ${{ github.repository }}
           ref: ${{ needs.get-github-info.outputs.origin_branch }}
