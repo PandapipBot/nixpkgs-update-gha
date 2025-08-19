@@ -39,6 +39,7 @@ jobs:
           - python3Packages.optree
           - python3Packages.kaleido
           - python3Packages.kneaddata
+          - python3Packages.plotly
           - cpm-cmake
           - gpredict
           - gpredict-unstable
