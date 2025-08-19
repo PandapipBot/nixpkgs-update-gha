@@ -39,6 +39,11 @@ jobs:
           - python3Packages.optree
           - python3Packages.kaleido
           - python3Packages.kneaddata
+          - cpm-cmake
+          - gpredict
+          - gpredict-unstable
+          - intel-undervolt
+          - qgroundcontrol
 
     steps:
       - if: ${{ !matrix.package }}
