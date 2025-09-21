@@ -36,15 +36,43 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - python3Packages.optree
+          - android-studio-tools
+          - brainflow
+          - cpm-cmake
+          - cups-idprt-barcode
+          - cups-idprt-mt888
+          - cups-idprt-mt890
+          - cups-idprt-sp900
+          - cups-idprt-tspl
+          - python3Packages.dendropy
+          - envision-xr
+          - goocanvas2
+          - goocanvas3
+          - gpredict-unstable
+          - immersed
+          - intel-undervolt
           - python3Packages.kaleido
           - python3Packages.kneaddata
+          - lprint
+          - motoc
+          - python3Packages.nptyping
+          - python3Packages.optree
+          - oscavmgr
+          - paup-cli
           - python3Packages.plotly
-          - cpm-cmake
-          - gpredict
-          - gpredict-unstable
-          - intel-undervolt
+          - pop-hp-wallpapers
+          - pop-wallpapers
           - qgroundcontrol
+          - qhexedit2
+          # TODO: StardustXR stuff
+          - system76-wallpapers
+          # Commented out due to shared maintainership
+          # - gpredict
+          # - localsend
+          # - stalwart-mail
+          # - stalwart-mail-spam-filter # TODO: This should be in by-name
+          # - stalwart-mail-webadmin # TODO: Likewise
+          # - waycheck
 
     steps:
       - if: ${{ !matrix.package }}
