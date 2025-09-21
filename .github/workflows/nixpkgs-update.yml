@@ -85,7 +85,7 @@ jobs:
           # TODO: This requires a bunch of stuff from master to be in the binary cache
           # TODO: Use nix develop --file instead of nix-shell
           nix-shell "$NIXPKGS_LOCATION/maintainers/scripts/update.nix" --argstr path "$PACKAGE" --argstr skip-prompt true --argstr commit false | tee update.log
-          if ! grep -q "Packages updated!" update.log; then
+          if [ $? -ne 0 ]; then
             echo "::error title=Failed to update packages!::The update script did not report a successful package update, please check the full logs for more details."
             exit 1
           fi
