@@ -45,7 +45,7 @@ jobs:
           - cups-idprt-sp900
           - cups-idprt-tspl
           - python3Packages.dendropy
-          - envision-xr
+          - envision-unwrapped
           - goocanvas2
           - goocanvas3
           - gpredict-unstable
