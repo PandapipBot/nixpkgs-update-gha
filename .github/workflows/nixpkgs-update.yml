@@ -234,7 +234,7 @@ jobs:
 
           if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
             # On the first run we can afford to be more aggressive with optimizing
-            git gc --aggressive
+            git -C "$NIXPKGS_LOCATION" gc --aggressive
           else
             # Like git gc --aggressive but reuses some existing data at the cost of an insignificant amount of space
             git -C "$NIXPKGS_LOCATION" repack -ad --depth=50 --window=100 --window-memory=8g
