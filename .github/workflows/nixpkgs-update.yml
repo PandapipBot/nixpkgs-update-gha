@@ -229,7 +229,7 @@ jobs:
           fi
 
           # We always want it to be up-to-date with upstream/master
-          git -C "$NIXPKGS_LOCATION" fetch upstream
+          git -C "$NIXPKGS_LOCATION" fetch upstream --filter=blob:none
           git -C "$NIXPKGS_LOCATION" reset --hard upstream/master
 
           if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
