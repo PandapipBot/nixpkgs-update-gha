@@ -224,7 +224,7 @@ jobs:
           # On first run, get ourselves a clone of nixpkgs (duh)
           if [ "$NIXPKGS_FIRST_RUN" = "1" ]; then
             mkdir -p "$(dirname "$NIXPKGS_LOCATION")"
-            git clone "$NIXPKGS_REPO_URL" "$NIXPKGS_LOCATION"
+            git clone "$NIXPKGS_REPO_URL" "$NIXPKGS_LOCATION" --filter=blob:none
             git -C "$NIXPKGS_LOCATION" remote add upstream "$UPSTREAM_NIXPKGS_REPO_URL" || git -C "$NIXPKGS_LOCATION" remote set-url upstream "$UPSTREAM_NIXPKGS_REPO_URL"
           fi
 
