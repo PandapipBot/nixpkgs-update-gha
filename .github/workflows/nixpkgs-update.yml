@@ -110,7 +110,6 @@ jobs:
           pushd "$NIXPKGS_LOCATION"
           nix develop "${GITHUB_WORKSPACE%/}/${ORIGIN_LOCATION#/}#nixpkgs-update-gha" --command bash -c "nixpkgs-update update \
             --pr \
-            --cve \
             --nixpkgs-review \
             \"${{ matrix.package }} ${{ steps.pkgdata.outputs.old_version }} ${{ steps.pkgdata.outputs.new_version }}\""
           popd
