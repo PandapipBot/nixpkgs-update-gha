@@ -45,8 +45,8 @@ jobs:
           - cups-idprt-sp900
           - cups-idprt-tspl
           - python3Packages.dendropy
-          - goocanvas2
-          - goocanvas3
+          - goocanvas_2
+          - goocanvas_3
           - gpredict-unstable
           - immersed
           - intel-undervolt
