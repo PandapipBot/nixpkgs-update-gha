@@ -47,7 +47,6 @@ jobs:
           - python3Packages.dendropy
           - goocanvas_2
           - goocanvas_3
-          - gpredict-unstable
           - immersed
           - intel-undervolt
           # - python3Packages.kaleido # TODO: Requires manual update to v1
