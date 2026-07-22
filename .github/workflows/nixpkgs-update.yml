@@ -52,6 +52,7 @@ jobs:
           key: ${{ env.CACHE_KEY }}-${{ github.run_id }}
           restore-keys: |
             ${{ env.CACHE_KEY }}
+          fail-on-cache-miss: true
       
       - name: Checkout nixpkgs-review-gha
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
